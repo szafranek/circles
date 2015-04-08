@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-type" content="text/html; charset=utf-8">
+<title>Canvas Experiments</title>
+<style>
+body {
+	margin: 0;
+	padding: 0;
+	font-family: Helvetica, Arial, sans-serif;
+	font-size: 62.5%;
+	color: #000;
+}
+canvas {
+	display: block;
+}
+form {
+	font-size: 130%;
+	background-color: rgba(0,0,0,0.75);
+	position: absolute;
+	width: 100%;
+	padding: 15px 0 0;
+	box-sizing: border-box;
+	display: flex;
+	display: -webkit-flex;
+	flex-direction: row;
+	flex-wrap: wrap;
+	justify-content: center;
+	-webkit-flex-direction: row;
+	-webkit-flex-wrap: wrap;
+	-webkit-justify-content: center;
+	transition: opacity 0.5s;
+}
+form.disabled {
+	opacity: 0;
+}
+input {
+	margin-left: 5px;
+	border: 0;
+	padding: 3px;
+	width: 5em;
+	font-size: 100%;
+	border-radius: 2px;
+}
+label {
+	color: #fff;
+	margin: 0 15px 15px;
+}
+</style>
+</head>
+<body>
+<form class="controls">
+<label>Grid size:<input name="grid" type="number" min="1" max="30" step="1" inputmode="numeric"></label>
+<label>Radius:<input name="radius" type="number" min="0.1" max="2" step="0.1" inputmode="numeric"></label>
+
+<label>Color offset:<input name="colorOffset" type="number" min="0" max="6" step="1" inputmode="numeric"></label>
+<label>Frequency:<input name="frequency" type="number" min="0" max="20" step="1" inputmode="numeric"></label>
+
+<label>Horizontal gradient:<input name="hGradient" type="number" min="0" max="1" step="0.1" inputmode="numeric"></label>
+<label>Vertical gradient:<input name="vGradient" type="number" min="0" max="1" step="0.1" inputmode="numeric"></label>
+<label>Horizontal gradient start:<input name="hStart" type="number" min="0.5" max="2" step="0.01" inputmode="numeric"></label>
+<label>Vertical gradient start:<input name="vStart" type="number" min="0.5" max="2" step="0.01" inputmode="numeric"></label>
+
+</form>
+<canvas id="canvas-one"></canvas>
+<script>
+
+function resizeCanvas() {
+	canvas.width = window.innerWidth;
+	canvas.height = window.innerHeight;
+}
+
+function showControls() {
+	if (editMode) {
+		return;
+	}
+	if (!controlsVisible) {
+		document.querySelector(".controls").classList.remove("disabled");
+	}
+	controlsVisible = true;
+	clearTimeout(controlTimer);
+	controlTimer = setTimeout(hideControls, 3000);
+}
+
+function hideControls() {
+	controlsVisible = false;
+	document.querySelector(".controls").classList.add("disabled");
+}
+
+function startEditMode() {
+	showControls();
+	editMode = true;
+	clearTimeout(controlTimer);
+}
+
+function endEditMode() {
+	editMode = false;
+	hideControls();
+}
+
+function initControls() {
+	var d = document;
+	Object.keys(config).forEach(function(key) {
+		var el = d.querySelector("[name=" + key + "]");
+		el.setAttribute("value", String(config[key]));
+		el.addEventListener("input", function(e) {
+			config[key] = Number(el.value);
+			drawAll();
+		});
+	});
+}
+
+
+function fillAll(filler) {
+	ctx.fillStyle = filler;
+	ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+	ctx.fill();
+}
+
+function fillSpot(color, x, y, radius) {
+	ctx.fillStyle = color;
+	ctx.beginPath();
+	ctx.arc(x, y, radius, 0, Math.PI * 2, true);
+	ctx.fill();
+}
+
+function fillPoly(color, x, y, size) {
+	var sides = 6;
+	ctx.beginPath();
+	ctx.moveTo(x + size * Math.cos(0), y + size * Math.sin(0));
+	for (var i = 1; i <= sides; i++) {
+		ctx.lineTo(x + size * Math.cos(i * 2 * Math.PI / sides), y + size * Math.sin(i * 2 * Math.PI / sides));
+	}
+	ctx.fillStyle = color;
+	ctx.fill();
+}
+
+function prettyLinearGradient() {
+	var colors = [
+		{"name": "green", "rgb": "146,220,1"},
+		{"name": "turquoise", "rgb": "1,220,146"},
+		{"name": "blue", "rgb": "1,146,220"},
+		{"name": "violet", "rgb": "146,1,220"},
+		{"name": "purple", "rgb": "220,1,146"},
+		{"name": "orange", "rgb": "220,146,1"},
+		{"name": "yellow", "rgb": "220,220,1"}
+	];
+	var linear = ctx.createLinearGradient(0, 0, ctx.canvas.width, ctx.canvas.height);
+	var index = 0;
+	for (var c = 0, l = colors.length; c < l; c++) {
+		index = (c + config.colorOffset) % l;
+		linear.addColorStop(c / l, "rgba("+colors[index].rgb+",1)")
+	}
+	linear.addColorStop(1, "rgba("+colors[config.colorOffset].rgb+",1)");
+	return linear;
+}
+
+function drawPoints() {
+	var gradient = prettyLinearGradient();
+
+	var cw = canvas.width;
+	var ch = canvas.height;
+	var grid = Math.round(config.grid * Math.log(cw));
+	var maxRadius = config.radius * grid;
+
+	for (var y = 0, row = 0; y < ch - grid/2; y += Math.sqrt(3)/2 * grid, row++) {
+		var normalizedHeight = y / ch;
+		for (var x = 0; x < cw - grid/2; x += grid) {
+			var normalizedWidth = x / cw;
+			var fraction = (Math.pow(Math.sin(config.frequency*Math.log(normalizedWidth)), 2) + Math.log(1/normalizedWidth+1)) * Math.log(config.hStart + config.hGradient*normalizedWidth)*Math.log(config.vStart + config.vGradient * normalizedHeight);
+			var radius = fraction * maxRadius;
+			var xDist = 0;
+			if (row % 2 === 0) {
+				xDist = grid / 2;
+			}
+			fillSpot(gradient, x + xDist, y + grid / 2, radius);
+		}
+	}
+}
+
+function drawAll() {
+	fillAll("rgb(254,253,249)");
+	drawPoints();
+}
+
+
+////////
+var controlTimer = setTimeout(hideControls, 3000);
+var canvas = document.getElementById("canvas-one");
+var ctx = canvas.getContext("2d");
+var controlsVisible = true;
+var editMode = false;
+var config = {
+	colorOffset: 0,
+	grid: 6,
+	radius: 1.2,
+	frequency: 5,
+	hGradient: 0.6,
+	vGradient: 0.7,
+	hStart: 1.06,
+	vStart: 1.05
+};
+
+
+window.addEventListener('resize', function(){resizeCanvas(); drawAll()}, false);
+window.addEventListener('orientationchange', function(){resizeCanvas(); drawAll()}, false);
+window.addEventListener('mousemove', showControls, false);
+window.addEventListener('click', showControls, false);
+window.addEventListener('touchend', showControls, false);
+
+Array.prototype.slice.call(document.querySelectorAll(".controls input")).forEach(function(inputEl) {
+	inputEl.addEventListener("focus", startEditMode);
+	inputEl.addEventListener("blur", endEditMode);
+});
+
+
+
+resizeCanvas();
+drawAll();
+initControls();
+
+
+
+
+</script>
+</body>
+</html>
