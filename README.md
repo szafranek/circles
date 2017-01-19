@@ -1,5 +1,5 @@
 # circles
-Generator of patterns made of circles
+Generator of wavy patterns made of circles.
 
 
 ## Demo
